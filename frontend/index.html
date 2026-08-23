@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ranking Shorts</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#181b22; --panel2:#1f232c; --line:#2a2f3a;
+    --text:#e8ecf3; --muted:#9aa4b2; --accent:#ff375f; --accent2:#ffd400; --ok:#2ec77a;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  header{padding:20px 24px;border-bottom:1px solid var(--line);display:flex;
+    align-items:center;gap:14px;flex-wrap:wrap}
+  header h1{font-size:20px;margin:0;letter-spacing:.2px}
+  header .sub{color:var(--muted);font-size:13px}
+  #health{margin-left:auto;font-size:12.5px;color:var(--muted)}
+  #health b{color:var(--ok)} #health .bad{color:var(--accent)}
+  .wrap{max-width:1200px;margin:0 auto;padding:22px 24px 120px}
+
+  .toolbar{display:flex;gap:18px;align-items:center;flex-wrap:wrap;
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px 16px;margin-bottom:20px}
+  .toolbar label{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .seg button{background:transparent;color:var(--muted);border:0;padding:7px 14px;
+    cursor:pointer;font-size:13px}
+  .seg button.on{background:var(--accent);color:#fff}
+  .hint{color:var(--muted);font-size:12.5px}
+
+  .slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:12px;display:flex;flex-direction:column;gap:10px;transition:box-shadow .15s,opacity .15s}
+  .card.dragging{opacity:.5;box-shadow:0 0 0 2px var(--accent)}
+  .card.over{box-shadow:0 0 0 2px var(--accent2)}
+  .card .top{display:flex;align-items:center;gap:8px}
+  .handle{cursor:grab;color:var(--muted);font-size:18px;user-select:none;
+    padding:2px 4px;border-radius:6px}
+  .handle:active{cursor:grabbing}
+  .slotno{font-size:12px;color:var(--muted)}
+
+  /* 9:16 live preview */
+  .preview{position:relative;aspect-ratio:9/16;background:
+     repeating-linear-gradient(45deg,#20242d,#20242d 12px,#1b1e26 12px,#1b1e26 24px);
+    border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex}
+  .preview .empty{margin:auto;color:#5b6472;font-size:12px;text-align:center;padding:0 10px}
+  .ov{position:absolute;left:0;right:0;text-align:center;pointer-events:none;
+    font-weight:800;color:#fff;text-shadow:-2px -2px 0 #000,2px -2px 0 #000,-2px 2px 0 #000,
+      2px 2px 0 #000,0 2px 0 #000,0 -2px 0 #000}
+  .ov.rank{top:6%;font-size:30px}
+  .ov.title{top:17%;font-size:15px;line-height:1.15;padding:0 8px}
+
+  .card input, .card select{width:100%;background:var(--panel2);color:var(--text);
+    border:1px solid var(--line);border-radius:9px;padding:8px 9px;font-size:13px}
+  .card .row{display:flex;gap:8px}
+  .card .row > *{flex:1;min-width:0}
+  .field label{display:block;font-size:11px;color:var(--muted);margin:0 0 3px 2px}
+
+  .genbar{position:fixed;left:0;right:0;bottom:0;background:rgba(15,17,21,.92);
+    backdrop-filter:blur(8px);border-top:1px solid var(--line);padding:14px 24px;
+    display:flex;align-items:center;gap:16px;z-index:5}
+  .genbar .grow{flex:1}
+  button.primary{background:var(--accent);color:#fff;border:0;border-radius:11px;
+    padding:12px 22px;font-size:15px;font-weight:700;cursor:pointer}
+  button.primary:disabled{opacity:.5;cursor:not-allowed}
+  .progress{height:8px;background:var(--panel2);border-radius:6px;overflow:hidden;flex:1;max-width:340px;display:none}
+  .progress > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .3s}
+  #stage{font-size:13px;color:var(--muted);min-width:160px}
+  #stage.err{color:var(--accent)}
+
+  .result{margin-top:22px;background:var(--panel);border:1px solid var(--line);
+    border-radius:var(--radius);padding:16px;display:none;gap:18px;align-items:flex-start}
+  .result.show{display:flex;flex-wrap:wrap}
+  .result video{width:270px;aspect-ratio:9/16;background:#000;border-radius:10px}
+  .result a.dl{display:inline-block;margin-top:10px;background:var(--ok);color:#04140b;
+    text-decoration:none;padding:10px 16px;border-radius:10px;font-weight:700}
+</style>
+</head>
+<body>
+<header>
+  <h1>Ranking&nbsp;Shorts</h1>
+  <span class="sub">Build a vertical “top&nbsp;5” from clips · drag to reorder · no music, no SFX</span>
+  <span id="health">checking…</span>
+</header>
+
+<div class="wrap">
+  <div class="toolbar">
+    <label>Vertical fill
+      <span class="seg" id="fill">
+        <button data-v="blur" class="on">Blur bg</button>
+        <button data-v="crop">Crop</button>
+      </span>
+    </label>
+    <label><input type="checkbox" id="mute"> Mute clip audio</label>
+    <span class="hint">Play order = left→right order of the cards below. Rank is just the burned label.</span>
+  </div>
+
+  <div class="slots" id="slots"></div>
+
+  <div class="result" id="result">
+    <video id="rvid" controls playsinline></video>
+    <div>
+      <h3 style="margin:.2em 0">Your ranking short is ready</h3>
+      <p class="hint" id="rmeta"></p>
+      <a class="dl" id="rdl" href="#" download>⤓ Download .mp4</a>
+    </div>
+  </div>
+</div>
+
+<div class="genbar">
+  <button class="primary" id="gen">Generate video</button>
+  <div class="progress" id="prog"><i></i></div>
+  <span id="stage"></span>
+  <span class="grow"></span>
+  <span class="hint">Local tool · <span id="apihint"></span></span>
+</div>
+
+<script>
+const API = location.origin;         // frontend is served by the backend, same origin
+const N = 5;
+const slotsEl = document.getElementById('slots');
+let fill = 'blur';
+
+// ---- build the 5 slots ----
+function slotCard(i){
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.dataset.idx = i;
+  card.innerHTML = `
+    <div class="top">
+      <span class="handle" title="Drag to reorder">⠿</span>
+      <span class="slotno">slot ${i+1}</span>
+    </div>
+    <div class="preview">
+      <span class="empty">Paste a URL to<br>build this clip</span>
+      <div class="ov rank"></div>
+      <div class="ov title"></div>
+    </div>
+    <div class="field"><label>Video URL (YouTube / TikTok / Instagram)</label>
+      <input class="f-url" placeholder="https://…"></div>
+    <div class="row">
+      <div class="field"><label>Start</label><input class="f-start" placeholder="0:12"></div>
+      <div class="field"><label>End</label><input class="f-end" placeholder="0:20"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Rank</label>
+        <select class="f-rank">${[1,2,3,4,5].map(r=>`<option value="${r}">#${r}</option>`).join('')}</select></div>
+      <div class="field" style="flex:2"><label>Title</label><input class="f-title" placeholder="Rooftop escape"></div>
+    </div>`;
+  // defaults
+  card.querySelector('.f-rank').value = String(i+1);
+  // live preview
+  const pv = () => {
+    const url = card.querySelector('.f-url').value.trim();
+    const rank = card.querySelector('.f-rank').value;
+    const title = card.querySelector('.f-title').value.trim();
+    card.querySelector('.ov.rank').textContent = url ? '#'+rank : '';
+    card.querySelector('.ov.title').textContent = url ? title : '';
+    card.querySelector('.empty').style.display = url ? 'none' : 'block';
+  };
+  card.querySelectorAll('.f-url,.f-rank,.f-title').forEach(el=>el.addEventListener('input',pv));
+  wireDrag(card);
+  pv();
+  return card;
+}
+
+// ---- drag to reorder (drag starts only from the handle so inputs stay usable) ----
+let dragged = null;
+function wireDrag(card){
+  const handle = card.querySelector('.handle');
+  handle.addEventListener('mousedown', ()=> card.draggable = true);
+  card.addEventListener('dragstart', e=>{ dragged = card; card.classList.add('dragging');
+    e.dataTransfer.effectAllowed='move'; });
+  card.addEventListener('dragend', ()=>{ card.classList.remove('dragging');
+    card.draggable=false; dragged=null;
+    [...slotsEl.children].forEach(c=>c.classList.remove('over')); renumber(); });
+  card.addEventListener('dragover', e=>{
+    e.preventDefault();
+    if(!dragged || dragged===card) return;
+    card.classList.add('over');
+    const r = card.getBoundingClientRect();
+    const after = e.clientX > r.left + r.width/2;
+    slotsEl.insertBefore(dragged, after ? card.nextSibling : card);
+  });
+  card.addEventListener('dragleave', ()=> card.classList.remove('over'));
+  card.addEventListener('drop', e=> e.preventDefault());
+}
+function renumber(){
+  [...slotsEl.children].forEach((c,i)=> c.querySelector('.slotno').textContent = 'play #'+(i+1));
+}
+
+for(let i=0;i<N;i++) slotsEl.appendChild(slotCard(i));
+renumber();
+
+// ---- toolbar ----
+document.getElementById('fill').addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  fill = b.dataset.v;
+  [...e.currentTarget.children].forEach(x=>x.classList.toggle('on', x===b));
+});
+
+// ---- health ----
+fetch(API+'/api/health').then(r=>r.json()).then(h=>{
+  const ok = h.ffmpeg && h.yt_dlp;
+  document.getElementById('health').innerHTML = ok
+    ? 'backend <b>ready</b> · ffmpeg ✓ · yt-dlp ✓'
+    : `backend up · ffmpeg ${h.ffmpeg?'✓':'<span class="bad">missing</span>'} · yt-dlp ${h.yt_dlp?'✓':'<span class="bad">missing</span>'}`;
+  document.getElementById('apihint').textContent = API;
+}).catch(()=>{ document.getElementById('health').innerHTML='<span class="bad">backend not reachable</span>'; });
+
+// ---- generate ----
+const genBtn = document.getElementById('gen');
+const prog = document.getElementById('prog');
+const progBar = prog.querySelector('i');
+const stage = document.getElementById('stage');
+
+function collect(){
+  return [...slotsEl.children].map(c=>({
+    url:c.querySelector('.f-url').value.trim(),
+    start:c.querySelector('.f-start').value.trim(),
+    end:c.querySelector('.f-end').value.trim(),
+    rank:parseInt(c.querySelector('.f-rank').value,10),
+    title:c.querySelector('.f-title').value.trim(),
+  })).filter(s=>s.url);
+}
+
+genBtn.addEventListener('click', async ()=>{
+  const clips = collect();
+  if(!clips.length){ alert('Add at least one clip URL.'); return; }
+  for(const c of clips){ if(!c.start||!c.end){ alert('Every clip needs a Start and End time.'); return; } }
+
+  genBtn.disabled = true; stage.className=''; stage.textContent='Submitting…';
+  prog.style.display='block'; progBar.style.width='4%';
+  document.getElementById('result').classList.remove('show');
+
+  let job;
+  try{
+    const r = await fetch(API+'/api/generate',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({fill, mute:document.getElementById('mute').checked, clips})});
+    if(!r.ok){ throw new Error('HTTP '+r.status+' – '+(await r.text())); }
+    job = (await r.json()).job_id;
+  }catch(err){ fail(err.message); return; }
+
+  const poll = setInterval(async ()=>{
+    let s; try{ s = await (await fetch(API+'/api/jobs/'+job)).json(); }
+    catch{ return; }
+    stage.textContent = s.stage || s.status;
+    progBar.style.width = Math.max(4, (s.progress||0)*100).toFixed(0)+'%';
+    if(s.status==='completed'){ clearInterval(poll); done(job); }
+    else if(s.status==='error'){ clearInterval(poll); fail(s.error||'render failed'); }
+  }, 1500);
+});
+
+function done(job){
+  progBar.style.width='100%'; stage.textContent='Done ✓'; genBtn.disabled=false;
+  const url = API+'/api/jobs/'+job+'/video';
+  const res = document.getElementById('result');
+  document.getElementById('rvid').src = url;
+  document.getElementById('rdl').href = url;
+  document.getElementById('rmeta').textContent = 'Job '+job;
+  res.classList.add('show');
+  res.scrollIntoView({behavior:'smooth'});
+}
+function fail(msg){
+  genBtn.disabled=false; stage.className='err';
+  stage.textContent = 'Error: '+(msg||'').slice(0,140);
+  progBar.style.width='0%';
+}
+</script>
+</body>
+</html>

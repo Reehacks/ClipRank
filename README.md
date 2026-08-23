@@ -9,8 +9,20 @@ order you choose.
 By design it **never adds background music or sound effects** — each clip keeps its own
 original audio (or none, if you mute it).
 
-This repo currently contains the **backend** (FastAPI + yt-dlp + FFmpeg). The frontend
-GUI is the next piece.
+It has a browser **GUI** (5 clip slots, drag-to-reorder, live 9:16 preview) served by the
+**backend** (FastAPI + yt-dlp + FFmpeg).
+
+## Quick start (easiest)
+
+1. Install the two prerequisites once: **Python 3.10+** and **FFmpeg**
+   (Windows: `winget install Gyan.FFmpeg`).
+2. **Double-click `start.bat`** (Windows) — or run `./start.sh` on macOS/Linux.
+   The first run makes a virtual environment and installs everything; every run after is
+   instant. Your browser opens to the app automatically.
+3. Fill in some slots, drag them into the order you want, hit **Generate video**, and the
+   finished clip appears in the page to preview and download. Close the black window to stop.
+
+The manual steps below are the same thing by hand.
 
 ## Requirements
 
