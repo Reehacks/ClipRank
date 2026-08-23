@@ -1,0 +1,1 @@
+"""Ranking Shorts backend package."""

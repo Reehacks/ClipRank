@@ -1,0 +1,10 @@
+# runtime dirs
+work/
+output/
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+# os
+.DS_Store
