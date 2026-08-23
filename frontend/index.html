@@ -6,75 +6,132 @@
 <title>Ranking Shorts</title>
 <style>
   :root{
-    --bg:#0f1115; --panel:#181b22; --panel2:#1f232c; --line:#2a2f3a;
-    --text:#e8ecf3; --muted:#9aa4b2; --accent:#ff375f; --accent2:#ffd400; --ok:#2ec77a;
-    --radius:14px;
+    --bg:#0e1014; --panel:#171a21; --panel2:#1e222b; --line:#2a2f3a; --line2:#363c49;
+    --text:#e9edf4; --muted:#96a0af; --accent:#ff375f; --gold:#ffd400; --orange:#ff9500;
+    --ok:#2ec77a; --radius:14px;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--text);
-    font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-  header{padding:20px 24px;border-bottom:1px solid var(--line);display:flex;
-    align-items:center;gap:14px;flex-wrap:wrap}
-  header h1{font-size:20px;margin:0;letter-spacing:.2px}
-  header .sub{color:var(--muted);font-size:13px}
+    font:14.5px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  header{padding:16px 22px;border-bottom:1px solid var(--line);display:flex;
+    align-items:center;gap:14px;flex-wrap:wrap;position:sticky;top:0;background:var(--bg);z-index:6}
+  header h1{font-size:19px;margin:0;letter-spacing:.2px}
+  header .sub{color:var(--muted);font-size:12.5px}
   #health{margin-left:auto;font-size:12.5px;color:var(--muted)}
   #health b{color:var(--ok)} #health .bad{color:var(--accent)}
-  .wrap{max-width:1200px;margin:0 auto;padding:22px 24px 120px}
 
-  .toolbar{display:flex;gap:18px;align-items:center;flex-wrap:wrap;
-    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
-    padding:14px 16px;margin-bottom:20px}
-  .toolbar label{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px}
-  .seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
-  .seg button{background:transparent;color:var(--muted);border:0;padding:7px 14px;
-    cursor:pointer;font-size:13px}
+  .layout{display:grid;grid-template-columns:400px 1fr;gap:24px;
+    max-width:1500px;margin:0 auto;padding:20px 22px 130px;align-items:start}
+  @media (max-width:1080px){ .layout{grid-template-columns:1fr} }
+
+  /* ------------------------------- preview ------------------------------- */
+  .previewcol{position:sticky;top:74px}
+  .stage{position:relative;width:100%;aspect-ratio:9/16;border-radius:16px;
+    overflow:hidden;border:1px solid var(--line2);background:#11151b;
+    background-image:
+      linear-gradient(45deg,#191d25 25%,transparent 25%,transparent 75%,#191d25 75%),
+      linear-gradient(45deg,#191d25 25%,#14181f 25%,#14181f 75%,#191d25 75%);
+    background-size:34px 34px;background-position:0 0,17px 17px}
+  .stage video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+    display:none;background:#000}
+  .stage img.ov{position:absolute;inset:0;width:100%;height:100%;
+    object-fit:contain;pointer-events:none;user-select:none}
+  .stage .note{position:absolute;left:10px;right:10px;bottom:10px;text-align:center;
+    font-size:11.5px;color:var(--muted);background:rgba(0,0,0,.55);padding:6px;
+    border-radius:8px;pointer-events:none}
+  .stage.busy::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,.35)}
+
+  .scrub{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+  .scrub button{flex:1 1 auto;min-width:52px;background:var(--panel2);color:var(--muted);
+    border:1px solid var(--line);border-radius:9px;padding:7px 4px;cursor:pointer;
+    font-size:12px;line-height:1.25}
+  .scrub button b{display:block;color:var(--text);font-size:13px}
+  .scrub button.on{border-color:var(--accent);background:#2a1420;color:#fff}
+  .scrub button.on b{color:var(--accent)}
+
+  .pvbar{display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap}
+  .pvbar .ghost{background:var(--panel2);color:var(--text);border:1px solid var(--line);
+    border-radius:9px;padding:8px 12px;font-size:12.5px;cursor:pointer}
+  .pvbar .ghost:disabled{opacity:.45;cursor:not-allowed}
+  .pvbar .ghost.on{border-color:var(--gold);color:var(--gold)}
+  #pvstatus{font-size:11.5px;color:var(--muted);flex:1 1 100%}
+
+  /* ------------------------------- panels -------------------------------- */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px;margin-bottom:18px}
+  .panel > h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;
+    color:var(--muted);margin:0 0 12px;font-weight:700;display:flex;align-items:center;gap:10px}
+  .panel > h2 .thin{text-transform:none;letter-spacing:0;font-weight:400;font-size:12px}
+  .hint{color:var(--muted);font-size:12px}
+
+  input[type=text],input[type=url],select{background:var(--panel2);color:var(--text);
+    border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-size:13.5px;
+    width:100%;font-family:inherit}
+  input:focus,select:focus{outline:none;border-color:var(--line2)}
+  label.lbl{display:block;font-size:11px;color:var(--muted);margin:0 0 4px 2px}
+
+  /* title word colouring */
+  .words{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+  .word{display:flex;align-items:center;gap:6px;background:var(--panel2);
+    border:1px solid var(--line);border-radius:9px;padding:5px 6px 5px 9px;font-size:13px}
+  .word span{font-weight:700}
+  .swatches{display:flex;gap:3px}
+  .sw{width:15px;height:15px;border-radius:4px;border:1.5px solid #0006;cursor:pointer}
+  .sw.on{outline:2px solid var(--text);outline-offset:1px}
+
+  /* slot rows */
+  table.slots{width:100%;border-collapse:separate;border-spacing:0 8px}
+  table.slots th{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;
+    color:var(--muted);text-align:left;font-weight:600;padding:0 6px}
+  table.slots td{padding:0 4px;vertical-align:middle}
+  table.slots tr.row td{background:var(--panel2);padding:8px 6px;border-top:1px solid var(--line);
+    border-bottom:1px solid var(--line)}
+  table.slots tr.row td:first-child{border-left:1px solid var(--line);
+    border-radius:10px 0 0 10px}
+  table.slots tr.row td:last-child{border-right:1px solid var(--line);
+    border-radius:0 10px 10px 0}
+  table.slots tr.row.playing td{border-color:var(--accent)}
+  .ranknum{font-weight:800;font-size:20px;text-align:center;min-width:34px;
+    text-shadow:0 1px 0 #000}
+  .cell-narrow{width:78px} .cell-play{width:64px} .cell-rank{width:78px}
+  .colorpick{width:26px;height:22px;padding:0;border:1px solid var(--line);
+    border-radius:6px;background:none;cursor:pointer}
+
+  .btnrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  button.ghost{background:var(--panel2);color:var(--text);border:1px solid var(--line);
+    border-radius:9px;padding:7px 12px;font-size:12.5px;cursor:pointer}
+  button.ghost:hover{border-color:var(--line2)}
+  button.ghost:disabled{opacity:.4;cursor:not-allowed}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .seg button{background:transparent;color:var(--muted);border:0;padding:7px 12px;
+    cursor:pointer;font-size:12.5px}
   .seg button.on{background:var(--accent);color:#fff}
-  .hint{color:var(--muted);font-size:12.5px}
 
-  .slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
-    padding:12px;display:flex;flex-direction:column;gap:10px;transition:box-shadow .15s,opacity .15s}
-  .card.dragging{opacity:.5;box-shadow:0 0 0 2px var(--accent)}
-  .card.over{box-shadow:0 0 0 2px var(--accent2)}
-  .card .top{display:flex;align-items:center;gap:8px}
-  .handle{cursor:grab;color:var(--muted);font-size:18px;user-select:none;
-    padding:2px 4px;border-radius:6px}
-  .handle:active{cursor:grabbing}
-  .slotno{font-size:12px;color:var(--muted)}
+  .grid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:12px}
+  .slider{display:flex;flex-direction:column;gap:2px}
+  .slider .top{display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
+  .slider input[type=range]{width:100%;accent-color:var(--accent)}
+  .chk{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted)}
 
-  /* 9:16 live preview */
-  .preview{position:relative;aspect-ratio:9/16;background:
-     repeating-linear-gradient(45deg,#20242d,#20242d 12px,#1b1e26 12px,#1b1e26 24px);
-    border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex}
-  .preview .empty{margin:auto;color:#5b6472;font-size:12px;text-align:center;padding:0 10px}
-  .ov{position:absolute;left:0;right:0;text-align:center;pointer-events:none;
-    font-weight:800;color:#fff;text-shadow:-2px -2px 0 #000,2px -2px 0 #000,-2px 2px 0 #000,
-      2px 2px 0 #000,0 2px 0 #000,0 -2px 0 #000}
-  .ov.rank{top:6%;font-size:30px}
-  .ov.title{top:17%;font-size:15px;line-height:1.15;padding:0 8px}
-
-  .card input, .card select{width:100%;background:var(--panel2);color:var(--text);
-    border:1px solid var(--line);border-radius:9px;padding:8px 9px;font-size:13px}
-  .card .row{display:flex;gap:8px}
-  .card .row > *{flex:1;min-width:0}
-  .field label{display:block;font-size:11px;color:var(--muted);margin:0 0 3px 2px}
-
-  .genbar{position:fixed;left:0;right:0;bottom:0;background:rgba(15,17,21,.92);
-    backdrop-filter:blur(8px);border-top:1px solid var(--line);padding:14px 24px;
-    display:flex;align-items:center;gap:16px;z-index:5}
-  .genbar .grow{flex:1}
+  /* generate bar */
+  .genbar{position:fixed;left:0;right:0;bottom:0;background:rgba(14,16,20,.94);
+    backdrop-filter:blur(8px);border-top:1px solid var(--line);padding:12px 22px;
+    display:flex;align-items:center;gap:14px;z-index:7;flex-wrap:wrap}
   button.primary{background:var(--accent);color:#fff;border:0;border-radius:11px;
-    padding:12px 22px;font-size:15px;font-weight:700;cursor:pointer}
+    padding:11px 22px;font-size:15px;font-weight:700;cursor:pointer}
   button.primary:disabled{opacity:.5;cursor:not-allowed}
-  .progress{height:8px;background:var(--panel2);border-radius:6px;overflow:hidden;flex:1;max-width:340px;display:none}
-  .progress > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .3s}
-  #stage{font-size:13px;color:var(--muted);min-width:160px}
-  #stage.err{color:var(--accent)}
+  .progress{height:8px;background:var(--panel2);border-radius:6px;overflow:hidden;
+    flex:1;max-width:320px;display:none}
+  .progress > i{display:block;height:100%;width:0;
+    background:linear-gradient(90deg,var(--accent),var(--gold));transition:width .3s}
+  #stage2{font-size:12.5px;color:var(--muted);min-width:170px}
+  #stage2.err{color:var(--accent)}
 
-  .result{margin-top:22px;background:var(--panel);border:1px solid var(--line);
+  .result{margin-top:4px;background:var(--panel);border:1px solid var(--line);
     border-radius:var(--radius);padding:16px;display:none;gap:18px;align-items:flex-start}
   .result.show{display:flex;flex-wrap:wrap}
-  .result video{width:270px;aspect-ratio:9/16;background:#000;border-radius:10px}
+  .result video{width:250px;aspect-ratio:9/16;background:#000;border-radius:10px;
+    display:block;object-fit:contain}
   .result a.dl{display:inline-block;margin-top:10px;background:var(--ok);color:#04140b;
     text-decoration:none;padding:10px 16px;border-radius:10px;font-weight:700}
 </style>
@@ -82,30 +139,116 @@
 <body>
 <header>
   <h1>Ranking&nbsp;Shorts</h1>
-  <span class="sub">Build a vertical “top&nbsp;5” from clips · drag to reorder · no music, no SFX</span>
+  <span class="sub">One standing ranking that fills in as the clips play · no music, no SFX</span>
   <span id="health">checking…</span>
 </header>
 
-<div class="wrap">
-  <div class="toolbar">
-    <label>Vertical fill
-      <span class="seg" id="fill">
-        <button data-v="blur" class="on">Blur bg</button>
-        <button data-v="crop">Crop</button>
-      </span>
-    </label>
-    <label><input type="checkbox" id="mute"> Mute clip audio</label>
-    <span class="hint">Play order = left→right order of the cards below. Rank is just the burned label.</span>
+<div class="layout">
+
+  <!-- ============================ PREVIEW ============================ -->
+  <div class="previewcol">
+    <div class="stage" id="stage">
+      <video id="pvvid" controls playsinline muted loop></video>
+      <img class="ov" id="ovimg" alt="">
+      <div class="note" id="pvnote">Live preview of the burned-in overlay</div>
+    </div>
+
+    <div class="scrub" id="scrub"></div>
+
+    <div class="pvbar">
+      <button class="ghost" id="autoplay">▶ Play through</button>
+      <button class="ghost" id="proof">🎬 Render this clip for real</button>
+      <button class="ghost" id="clearproof" style="display:none">✕ Back to overlay</button>
+      <span id="pvstatus"></span>
+    </div>
   </div>
 
-  <div class="slots" id="slots"></div>
+  <!-- ============================ CONTROLS ============================ -->
+  <div>
+    <div class="panel">
+      <h2>Video title <span class="thin">— stands on screen for the whole video</span></h2>
+      <input type="text" id="title" placeholder="Ranking Insane Parkour Fails">
+      <div class="words" id="words"></div>
+      <p class="hint" style="margin:10px 0 0">Click a swatch to colour that word, like the
+        yellow/red words in the reference.</p>
+    </div>
 
-  <div class="result" id="result">
-    <video id="rvid" controls playsinline></video>
-    <div>
-      <h3 style="margin:.2em 0">Your ranking short is ready</h3>
-      <p class="hint" id="rmeta"></p>
-      <a class="dl" id="rdl" href="#" download>⤓ Download .mp4</a>
+    <div class="panel">
+      <h2>The ranking
+        <span class="thin">— rows are listed top-to-bottom exactly as they appear on screen</span>
+      </h2>
+      <table class="slots">
+        <thead>
+          <tr>
+            <th class="cell-rank">Rank</th>
+            <th>Caption <span style="text-transform:none;font-weight:400">(revealed when it plays)</span></th>
+            <th>Source URL</th>
+            <th class="cell-narrow">Start</th>
+            <th class="cell-narrow">End</th>
+            <th class="cell-play">Plays</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div class="btnrow" style="margin-top:12px">
+        <button class="ghost" id="less">− Remove rank</button>
+        <button class="ghost" id="more">+ Add rank</button>
+        <span style="width:10px"></span>
+        <span class="hint">Play order:</span>
+        <button class="ghost" id="countdown">Countdown (last → 1st)</button>
+        <button class="ghost" id="inorder">In order (1st → last)</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Behaviour</h2>
+      <div class="grid2">
+        <div>
+          <label class="lbl">Captions</label>
+          <select id="reveal">
+            <option value="accumulate">Stay once revealed</option>
+            <option value="current">Only the clip playing</option>
+            <option value="all">All visible always</option>
+          </select>
+        </div>
+        <div>
+          <label class="lbl">Number style</label>
+          <select id="suffix">
+            <option value=".">1.  2.  3.</option>
+            <option value="#">#1  #2  #3</option>
+            <option value="">1  2  3</option>
+          </select>
+        </div>
+        <div>
+          <label class="lbl">Vertical fill</label>
+          <span class="seg" id="fill">
+            <button data-v="blur" class="on">Blur bg</button>
+            <button data-v="crop">Crop</button>
+          </span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;justify-content:center">
+          <label class="chk"><input type="checkbox" id="highlight" checked> Enlarge the playing row</label>
+          <label class="chk"><input type="checkbox" id="shadow" checked> Drop shadow</label>
+          <label class="chk"><input type="checkbox" id="mute"> Mute clip audio</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Layout <span class="thin">— pixels in the 1080×1920 frame</span></h2>
+      <div class="grid2" id="sliders"></div>
+      <div class="btnrow" style="margin-top:14px">
+        <button class="ghost" id="reset">↺ Reset to reference layout</button>
+      </div>
+    </div>
+
+    <div class="result" id="result">
+      <video id="rvid" controls playsinline></video>
+      <div>
+        <h3 style="margin:.2em 0">Your ranking short is ready</h3>
+        <p class="hint" id="rmeta"></p>
+        <a class="dl" id="rdl" href="#" download>⤓ Download .mp4</a>
+      </div>
     </div>
   </div>
 </div>
@@ -113,126 +256,390 @@
 <div class="genbar">
   <button class="primary" id="gen">Generate video</button>
   <div class="progress" id="prog"><i></i></div>
-  <span id="stage"></span>
-  <span class="grow"></span>
+  <span id="stage2"></span>
+  <span style="flex:1"></span>
   <span class="hint">Local tool · <span id="apihint"></span></span>
 </div>
 
 <script>
-const API = location.origin;         // frontend is served by the backend, same origin
-const N = 5;
-const slotsEl = document.getElementById('slots');
-let fill = 'blur';
+const API = location.origin;
 
-// ---- build the 5 slots ----
-function slotCard(i){
-  const card = document.createElement('div');
-  card.className = 'card';
-  card.dataset.idx = i;
-  card.innerHTML = `
-    <div class="top">
-      <span class="handle" title="Drag to reorder">⠿</span>
-      <span class="slotno">slot ${i+1}</span>
-    </div>
-    <div class="preview">
-      <span class="empty">Paste a URL to<br>build this clip</span>
-      <div class="ov rank"></div>
-      <div class="ov title"></div>
-    </div>
-    <div class="field"><label>Video URL (YouTube / TikTok / Instagram)</label>
-      <input class="f-url" placeholder="https://…"></div>
-    <div class="row">
-      <div class="field"><label>Start</label><input class="f-start" placeholder="0:12"></div>
-      <div class="field"><label>End</label><input class="f-end" placeholder="0:20"></div>
-    </div>
-    <div class="row">
-      <div class="field"><label>Rank</label>
-        <select class="f-rank">${[1,2,3,4,5].map(r=>`<option value="${r}">#${r}</option>`).join('')}</select></div>
-      <div class="field" style="flex:2"><label>Title</label><input class="f-title" placeholder="Rooftop escape"></div>
-    </div>`;
-  // defaults
-  card.querySelector('.f-rank').value = String(i+1);
-  // live preview
-  const pv = () => {
-    const url = card.querySelector('.f-url').value.trim();
-    const rank = card.querySelector('.f-rank').value;
-    const title = card.querySelector('.f-title').value.trim();
-    card.querySelector('.ov.rank').textContent = url ? '#'+rank : '';
-    card.querySelector('.ov.title').textContent = url ? title : '';
-    card.querySelector('.empty').style.display = url ? 'none' : 'block';
-  };
-  card.querySelectorAll('.f-url,.f-rank,.f-title').forEach(el=>el.addEventListener('input',pv));
-  wireDrag(card);
-  pv();
-  return card;
+/* --------------------------------------------------------------------------
+   State. `slots` is indexed by rank-1 — the same order the list is drawn in —
+   and each slot carries `play`, the 1-based position at which it appears in the
+   video. Rank and play position are deliberately separate: a countdown ranks
+   1..6 top-to-bottom but plays 6 first, and that is the whole point of the
+   format the reference videos use.
+   -------------------------------------------------------------------------- */
+const PALETTE = ['#FFFFFF','#FFD400','#FF9500','#FF3B30','#2ec77a','#3fa9ff'];
+
+const DEFAULT_STYLE = {
+  title_size:78, title_top:140, title_max_lines:2,
+  list_x:100, list_top:560, row_gap:150, number_size:84, caption_size:56,
+  caption_color:'#FFFFFF', number_suffix:'.', indent_step:4,
+  highlight:true, active_scale:1.14, shadow:true, reveal:'accumulate'
+};
+
+const SLIDERS = [
+  ['title_size','Title size',30,140],
+  ['title_top','Title from top',20,600],
+  ['list_x','List from left',20,700],
+  ['list_top','List from top',150,1300],
+  ['row_gap','Row spacing',70,260],
+  ['number_size','Number size',36,170],
+  ['caption_size','Caption size',24,120],
+  ['indent_step','Row stagger',0,24],
+];
+
+const state = {
+  title: 'Ranking Insane Parkour Fails',
+  titleColors: ['#FFFFFF','#FFD400','#FF3B30','#FFFFFF'],
+  slots: [],
+  style: {...DEFAULT_STYLE},
+  fill: 'blur',
+  mute: false,
+  activePos: 0,       // which play position the preview is showing
+};
+
+function blankSlot(rank){
+  return {rank, caption:'', url:'', start:'', end:'', color:'', play:rank};
+}
+function setCount(n){
+  const cur = state.slots.length;
+  if(n > cur){ for(let r=cur+1; r<=n; r++) state.slots.push(blankSlot(r)); }
+  else state.slots = state.slots.slice(0, n);
+  // ranks always run 1..n top to bottom; play positions renormalise to a permutation
+  state.slots.forEach((s,i)=> s.rank = i+1);
+  normalisePlay();
+  state.activePos = Math.min(state.activePos, n-1);
+}
+function normalisePlay(){
+  const n = state.slots.length;
+  const order = [...state.slots].sort((a,b)=>(a.play||99)-(b.play||99));
+  order.forEach((s,i)=> s.play = i+1);
+}
+/** play position (0-based) -> slot index */
+function playOrder(){
+  return [...state.slots].sort((a,b)=>a.play-b.play).map(s => s.rank-1);
 }
 
-// ---- drag to reorder (drag starts only from the handle so inputs stay usable) ----
-let dragged = null;
-function wireDrag(card){
-  const handle = card.querySelector('.handle');
-  handle.addEventListener('mousedown', ()=> card.draggable = true);
-  card.addEventListener('dragstart', e=>{ dragged = card; card.classList.add('dragging');
-    e.dataTransfer.effectAllowed='move'; });
-  card.addEventListener('dragend', ()=>{ card.classList.remove('dragging');
-    card.draggable=false; dragged=null;
-    [...slotsEl.children].forEach(c=>c.classList.remove('over')); renumber(); });
-  card.addEventListener('dragover', e=>{
-    e.preventDefault();
-    if(!dragged || dragged===card) return;
-    card.classList.add('over');
-    const r = card.getBoundingClientRect();
-    const after = e.clientX > r.left + r.width/2;
-    slotsEl.insertBefore(dragged, after ? card.nextSibling : card);
+setCount(6);
+state.slots.forEach(s => s.play = state.slots.length - s.rank + 1);   // countdown default
+
+/* -------------------------------- title words -------------------------- */
+function titleWords(){
+  const parts = state.title.trim().split(/\s+/).filter(Boolean);
+  return parts.map((t,i)=>({text:t, color: state.titleColors[i] || '#FFFFFF'}));
+}
+function renderWords(){
+  const box = document.getElementById('words');
+  const words = titleWords();
+  box.innerHTML = '';
+  words.forEach((w,i)=>{
+    const el = document.createElement('div');
+    el.className = 'word';
+    el.innerHTML = `<span style="color:${w.color}">${w.text.replace(/[<&]/g,c=>({'<':'&lt;','&':'&amp;'}[c]))}</span>
+      <div class="swatches">${PALETTE.map(c=>
+        `<div class="sw${c.toLowerCase()===w.color.toLowerCase()?' on':''}" data-c="${c}"
+              style="background:${c}"></div>`).join('')}</div>`;
+    el.querySelectorAll('.sw').forEach(sw=> sw.addEventListener('click', ()=>{
+      state.titleColors[i] = sw.dataset.c;
+      renderWords(); schedule();
+    }));
+    box.appendChild(el);
   });
-  card.addEventListener('dragleave', ()=> card.classList.remove('over'));
-  card.addEventListener('drop', e=> e.preventDefault());
-}
-function renumber(){
-  [...slotsEl.children].forEach((c,i)=> c.querySelector('.slotno').textContent = 'play #'+(i+1));
 }
 
-for(let i=0;i<N;i++) slotsEl.appendChild(slotCard(i));
-renumber();
+/* -------------------------------- slot rows ---------------------------- */
+function autoColor(rank, total){
+  if(rank === 1) return '#FFD400';
+  if(rank === 3) return '#FF9500';
+  if(rank === total && total > 3) return '#FF3B30';
+  return '#FFFFFF';
+}
+function renderRows(){
+  const tb = document.getElementById('rows');
+  const n = state.slots.length;
+  const order = playOrder();
+  tb.innerHTML = '';
+  state.slots.forEach((s, i)=>{
+    const tr = document.createElement('tr');
+    tr.className = 'row' + (order[state.activePos] === i ? ' playing' : '');
+    const col = s.color || autoColor(s.rank, n);
+    tr.innerHTML = `
+      <td class="cell-rank">
+        <div style="display:flex;align-items:center;gap:6px;justify-content:center">
+          <span class="ranknum" style="color:${col}">${s.rank}${state.style.number_suffix==='#'?'':state.style.number_suffix}</span>
+          <input type="color" class="colorpick c-col" value="${col}" title="Colour of this number">
+        </div>
+      </td>
+      <td><input type="text" class="c-cap" value="" placeholder="No fear 🙈"></td>
+      <td><input type="url" class="c-url" value="" placeholder="https://…"></td>
+      <td class="cell-narrow"><input type="text" class="c-start" value="" placeholder="0:12"></td>
+      <td class="cell-narrow"><input type="text" class="c-end" value="" placeholder="0:20"></td>
+      <td class="cell-play"><select class="c-play">${
+        Array.from({length:n},(_,k)=>`<option value="${k+1}">${k+1}</option>`).join('')}</select></td>`;
+    tb.appendChild(tr);
 
-// ---- toolbar ----
+    const cap = tr.querySelector('.c-cap');   cap.value = s.caption;
+    const url = tr.querySelector('.c-url');   url.value = s.url;
+    const st  = tr.querySelector('.c-start'); st.value  = s.start;
+    const en  = tr.querySelector('.c-end');   en.value  = s.end;
+    tr.querySelector('.c-play').value = String(s.play);
+
+    cap.addEventListener('input', ()=>{ s.caption = cap.value; schedule(); });
+    url.addEventListener('input', ()=>{ s.url = url.value.trim(); });
+    st .addEventListener('input', ()=>{ s.start = st.value.trim(); });
+    en .addEventListener('input', ()=>{ s.end = en.value.trim(); });
+    tr.querySelector('.c-col').addEventListener('input', e=>{
+      s.color = e.target.value; renderRows(); schedule();
+    });
+    tr.querySelector('.c-play').addEventListener('change', e=>{
+      // swap play positions so the order stays a clean permutation
+      const want = parseInt(e.target.value,10);
+      const other = state.slots.find(o => o !== s && o.play === want);
+      if(other) other.play = s.play;
+      s.play = want;
+      renderRows(); renderScrub(); schedule();
+    });
+  });
+}
+
+/* ------------------------------- scrubber ------------------------------ */
+function renderScrub(){
+  const box = document.getElementById('scrub');
+  const order = playOrder();
+  box.innerHTML = '';
+  order.forEach((slotIdx, pos)=>{
+    const s = state.slots[slotIdx];
+    const b = document.createElement('button');
+    b.className = pos === state.activePos ? 'on' : '';
+    b.innerHTML = `<b>${s.rank}${state.style.number_suffix==='#'?'':state.style.number_suffix}</b>plays ${pos+1}`;
+    b.addEventListener('click', ()=>{
+      state.activePos = pos; stopAuto(); renderScrub(); renderRows(); schedule(0);
+    });
+    box.appendChild(b);
+  });
+}
+
+/* ----------------------- the live overlay preview ---------------------- */
+/* The preview is not a CSS mock-up: it POSTs to /api/overlay and shows the exact
+   PNG that gets composited into the video, so nothing can drift between what you
+   design here and what comes out of FFmpeg. */
+let pending = null, lastURL = null, inflight = false, queued = false;
+
+function payloadOverlay(){
+  return {
+    slots: state.slots.map(s => ({rank:s.rank, caption:s.caption, color:s.color})),
+    title: titleWords(),
+    style: state.style,
+    play_order: playOrder(),
+    active_pos: state.activePos,
+  };
+}
+async function drawOverlay(){
+  if(inflight){ queued = true; return; }
+  inflight = true;
+  try{
+    const r = await fetch(API+'/api/overlay', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payloadOverlay())});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const blob = await r.blob();
+    const u = URL.createObjectURL(blob);
+    const img = document.getElementById('ovimg');
+    img.src = u;
+    if(lastURL) URL.revokeObjectURL(lastURL);
+    lastURL = u;
+  }catch(err){
+    document.getElementById('pvnote').textContent = 'Preview failed: '+(err.message||err);
+  }finally{
+    inflight = false;
+    if(queued){ queued = false; drawOverlay(); }
+  }
+}
+function schedule(delay = 220){
+  clearTimeout(pending);
+  pending = setTimeout(drawOverlay, delay);
+}
+
+/* --------------------------- play-through demo ------------------------- */
+let autoTimer = null;
+function stopAuto(){
+  clearInterval(autoTimer); autoTimer = null;
+  document.getElementById('autoplay').classList.remove('on');
+  document.getElementById('autoplay').textContent = '▶ Play through';
+}
+document.getElementById('autoplay').addEventListener('click', ()=>{
+  if(autoTimer){ stopAuto(); return; }
+  const btn = document.getElementById('autoplay');
+  btn.classList.add('on'); btn.textContent = '⏸ Stop';
+  state.activePos = 0; renderScrub(); renderRows(); drawOverlay();
+  autoTimer = setInterval(()=>{
+    state.activePos = (state.activePos + 1) % state.slots.length;
+    renderScrub(); renderRows(); drawOverlay();
+  }, 1300);
+});
+
+/* ------------------- real single-clip proof render --------------------- */
+document.getElementById('proof').addEventListener('click', async ()=>{
+  const order = playOrder();
+  const clips = order.map(i => state.slots[i]);
+  const missing = clips.findIndex(s => !s.url || !s.start || !s.end);
+  if(missing !== -1 && missing <= state.activePos){
+    setPv('Rank '+clips[missing].rank+' needs a URL, start and end before this can render.');
+    return;
+  }
+  const usable = clips.slice(0, state.activePos+1)
+                      .every(s => s.url && s.start && s.end);
+  if(!usable){ setPv('Fill in every clip up to this one first.'); return; }
+
+  const btn = document.getElementById('proof');
+  btn.disabled = true; setPv('Submitting…');
+  document.getElementById('stage').classList.add('busy');
+
+  let job;
+  try{
+    const r = await fetch(API+'/api/preview',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        clips: clips.map(s=>({url:s.url,start:s.start,end:s.end,rank:s.rank,
+                              caption:s.caption,color:s.color})),
+        active_pos: state.activePos,
+        title: titleWords(), style: state.style,
+        fill: state.fill, mute: state.mute})});
+    if(!r.ok) throw new Error('HTTP '+r.status+' – '+(await r.text()).slice(0,160));
+    job = (await r.json()).job_id;
+  }catch(err){
+    setPv('Error: '+(err.message||err)); btn.disabled = false;
+    document.getElementById('stage').classList.remove('busy'); return;
+  }
+
+  const poll = setInterval(async ()=>{
+    let s; try{ s = await (await fetch(API+'/api/jobs/'+job)).json(); }catch{ return; }
+    setPv(s.stage || s.status);
+    if(s.status === 'completed'){
+      clearInterval(poll);
+      const v = document.getElementById('pvvid');
+      v.src = API+'/api/jobs/'+job+'/video?t='+Date.now();
+      v.style.display = 'block'; v.play().catch(()=>{});
+      document.getElementById('ovimg').style.display = 'none';   // already burned in
+      document.getElementById('clearproof').style.display = '';
+      document.getElementById('pvnote').textContent = 'Real render — overlay is burned in';
+      setPv(''); btn.disabled = false;
+      document.getElementById('stage').classList.remove('busy');
+    } else if(s.status === 'error'){
+      clearInterval(poll);
+      setPv('Error: '+String(s.error||'render failed').slice(0,200));
+      btn.disabled = false;
+      document.getElementById('stage').classList.remove('busy');
+    }
+  }, 1200);
+});
+document.getElementById('clearproof').addEventListener('click', ()=>{
+  const v = document.getElementById('pvvid');
+  v.pause(); v.removeAttribute('src'); v.load(); v.style.display = 'none';
+  document.getElementById('ovimg').style.display = '';
+  document.getElementById('clearproof').style.display = 'none';
+  document.getElementById('pvnote').textContent = 'Live preview of the burned-in overlay';
+});
+function setPv(t){ document.getElementById('pvstatus').textContent = t; }
+
+/* -------------------------------- controls ----------------------------- */
+document.getElementById('title').addEventListener('input', e=>{
+  state.title = e.target.value; renderWords(); schedule();
+});
+document.getElementById('more').addEventListener('click', ()=>{
+  if(state.slots.length >= 10) return;
+  setCount(state.slots.length+1); refreshAll();
+});
+document.getElementById('less').addEventListener('click', ()=>{
+  if(state.slots.length <= 3) return;
+  setCount(state.slots.length-1); refreshAll();
+});
+document.getElementById('countdown').addEventListener('click', ()=>{
+  const n = state.slots.length;
+  state.slots.forEach(s => s.play = n - s.rank + 1);
+  state.activePos = 0; refreshAll();
+});
+document.getElementById('inorder').addEventListener('click', ()=>{
+  state.slots.forEach(s => s.play = s.rank);
+  state.activePos = 0; refreshAll();
+});
+document.getElementById('reveal').addEventListener('change', e=>{
+  state.style.reveal = e.target.value; schedule(0);
+});
+document.getElementById('suffix').addEventListener('change', e=>{
+  state.style.number_suffix = e.target.value; refreshAll();
+});
+document.getElementById('highlight').addEventListener('change', e=>{
+  state.style.highlight = e.target.checked; schedule(0);
+});
+document.getElementById('shadow').addEventListener('change', e=>{
+  state.style.shadow = e.target.checked; schedule(0);
+});
+document.getElementById('mute').addEventListener('change', e=>{ state.mute = e.target.checked; });
 document.getElementById('fill').addEventListener('click', e=>{
   const b = e.target.closest('button'); if(!b) return;
-  fill = b.dataset.v;
+  state.fill = b.dataset.v;
   [...e.currentTarget.children].forEach(x=>x.classList.toggle('on', x===b));
 });
 
-// ---- health ----
+function renderSliders(){
+  const box = document.getElementById('sliders');
+  box.innerHTML = '';
+  SLIDERS.forEach(([key,label,min,max])=>{
+    const d = document.createElement('div');
+    d.className = 'slider';
+    d.innerHTML = `<div class="top"><span>${label}</span><b id="v-${key}">${state.style[key]}</b></div>
+      <input type="range" min="${min}" max="${max}" value="${state.style[key]}" data-k="${key}">`;
+    d.querySelector('input').addEventListener('input', e=>{
+      state.style[key] = parseInt(e.target.value,10);
+      document.getElementById('v-'+key).textContent = state.style[key];
+      schedule(60);
+    });
+    box.appendChild(d);
+  });
+}
+document.getElementById('reset').addEventListener('click', ()=>{
+  const keep = state.style.reveal, sfx = state.style.number_suffix;
+  state.style = {...DEFAULT_STYLE, reveal:keep, number_suffix:sfx};
+  renderSliders(); schedule(0);
+});
+
+function refreshAll(){
+  renderWords(); renderRows(); renderScrub(); schedule(0);
+}
+
+/* -------------------------------- health ------------------------------- */
 fetch(API+'/api/health').then(r=>r.json()).then(h=>{
   const ok = h.ffmpeg && h.yt_dlp;
+  const emoji = h.emoji_font ? '· emoji ✓' : '· <span class="bad">no emoji font</span>';
   document.getElementById('health').innerHTML = ok
-    ? 'backend <b>ready</b> · ffmpeg ✓ · yt-dlp ✓'
-    : `backend up · ffmpeg ${h.ffmpeg?'✓':'<span class="bad">missing</span>'} · yt-dlp ${h.yt_dlp?'✓':'<span class="bad">missing</span>'}`;
+    ? `backend <b>ready</b> · ffmpeg ✓ · yt-dlp ✓ ${emoji}`
+    : `backend up · ffmpeg ${h.ffmpeg?'✓':'<span class="bad">missing</span>'} · yt-dlp ${h.yt_dlp?'✓':'<span class="bad">missing</span>'} ${emoji}`;
   document.getElementById('apihint').textContent = API;
-}).catch(()=>{ document.getElementById('health').innerHTML='<span class="bad">backend not reachable</span>'; });
+}).catch(()=>{
+  document.getElementById('health').innerHTML='<span class="bad">backend not reachable</span>';
+});
 
-// ---- generate ----
+/* ------------------------------- generate ------------------------------ */
 const genBtn = document.getElementById('gen');
 const prog = document.getElementById('prog');
 const progBar = prog.querySelector('i');
-const stage = document.getElementById('stage');
-
-function collect(){
-  return [...slotsEl.children].map(c=>({
-    url:c.querySelector('.f-url').value.trim(),
-    start:c.querySelector('.f-start').value.trim(),
-    end:c.querySelector('.f-end').value.trim(),
-    rank:parseInt(c.querySelector('.f-rank').value,10),
-    title:c.querySelector('.f-title').value.trim(),
-  })).filter(s=>s.url);
-}
+const stageEl = document.getElementById('stage2');
 
 genBtn.addEventListener('click', async ()=>{
-  const clips = collect();
-  if(!clips.length){ alert('Add at least one clip URL.'); return; }
-  for(const c of clips){ if(!c.start||!c.end){ alert('Every clip needs a Start and End time.'); return; } }
+  const order = playOrder();
+  const clips = order.map(i => state.slots[i]);
+  const bad = clips.filter(s => !s.url || !s.start || !s.end);
+  if(bad.length){
+    alert('Every rank needs a URL, start and end.\nStill missing: '
+          + bad.map(s=>'#'+s.rank).join(', '));
+    return;
+  }
 
-  genBtn.disabled = true; stage.className=''; stage.textContent='Submitting…';
+  genBtn.disabled = true; stageEl.className=''; stageEl.textContent='Submitting…';
   prog.style.display='block'; progBar.style.width='4%';
   document.getElementById('result').classList.remove('show');
 
@@ -240,36 +647,44 @@ genBtn.addEventListener('click', async ()=>{
   try{
     const r = await fetch(API+'/api/generate',{method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({fill, mute:document.getElementById('mute').checked, clips})});
-    if(!r.ok){ throw new Error('HTTP '+r.status+' – '+(await r.text())); }
+      body: JSON.stringify({
+        clips: clips.map(s=>({url:s.url,start:s.start,end:s.end,rank:s.rank,
+                              caption:s.caption,color:s.color})),
+        title: titleWords(), style: state.style,
+        fill: state.fill, mute: state.mute})});
+    if(!r.ok) throw new Error('HTTP '+r.status+' – '+(await r.text()).slice(0,200));
     job = (await r.json()).job_id;
   }catch(err){ fail(err.message); return; }
 
   const poll = setInterval(async ()=>{
-    let s; try{ s = await (await fetch(API+'/api/jobs/'+job)).json(); }
-    catch{ return; }
-    stage.textContent = s.stage || s.status;
-    progBar.style.width = Math.max(4, (s.progress||0)*100).toFixed(0)+'%';
+    let s; try{ s = await (await fetch(API+'/api/jobs/'+job)).json(); }catch{ return; }
+    stageEl.textContent = s.stage || s.status;
+    progBar.style.width = Math.max(4,(s.progress||0)*100).toFixed(0)+'%';
     if(s.status==='completed'){ clearInterval(poll); done(job); }
     else if(s.status==='error'){ clearInterval(poll); fail(s.error||'render failed'); }
   }, 1500);
 });
 
 function done(job){
-  progBar.style.width='100%'; stage.textContent='Done ✓'; genBtn.disabled=false;
+  progBar.style.width='100%'; stageEl.textContent='Done ✓'; genBtn.disabled=false;
   const url = API+'/api/jobs/'+job+'/video';
   const res = document.getElementById('result');
   document.getElementById('rvid').src = url;
   document.getElementById('rdl').href = url;
   document.getElementById('rmeta').textContent = 'Job '+job;
   res.classList.add('show');
-  res.scrollIntoView({behavior:'smooth'});
+  res.scrollIntoView({behavior:'smooth', block:'center'});
 }
 function fail(msg){
-  genBtn.disabled=false; stage.className='err';
-  stage.textContent = 'Error: '+(msg||'').slice(0,140);
+  genBtn.disabled=false; stageEl.className='err';
+  stageEl.textContent = 'Error: '+String(msg||'').slice(0,160);
   progBar.style.width='0%';
 }
+
+/* --------------------------------- boot -------------------------------- */
+document.getElementById('title').value = state.title;
+renderSliders();
+refreshAll();
 </script>
 </body>
 </html>

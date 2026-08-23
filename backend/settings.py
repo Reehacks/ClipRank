@@ -9,7 +9,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent          # ranking-shorts/
 ASSETS = ROOT / "assets"
-FONT = Path(os.environ.get("RANKING_FONT", ASSETS / "DejaVuSans-Bold.ttf"))
+# Display face for the title, rank numbers and captions. Poppins Bold is the heavy
+# geometric sans the reference videos use; DejaVu stays as an automatic fallback.
+FONT = Path(os.environ.get("RANKING_FONT", ASSETS / "Poppins-Bold.ttf"))
+# Colour-emoji face, so captions like "No fear\U0001F648" render in colour instead of
+# as empty boxes. Optional - without it, emoji are skipped.
+EMOJI_FONT = Path(os.environ.get("RANKING_EMOJI_FONT", ASSETS / "NotoColorEmoji.ttf"))
 
 # Working areas. WORK holds per-job intermediate files; OUTPUT holds finished videos.
 WORK_DIR = Path(os.environ.get("RANKING_WORK_DIR", ROOT / "work"))

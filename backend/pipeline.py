@@ -1,27 +1,30 @@
 """The yt-dlp + FFmpeg pipeline.
 
-Four stages, each a small pure-ish function so they can be tested on their own:
+Stages, each a small pure-ish function so they can be tested on their own:
 
     download_segment  ->  a raw mp4 of just the requested [start,end] window
-    process_clip      ->  a normalised 9:16 clip with the rank + title burned in
+    process_clip      ->  a normalised 9:16 clip with a finished overlay composited on
     stitch            ->  the normalised clips concatenated, in play order
-    run_pipeline      ->  orchestrates the three above over a whole request
+    run_pipeline      ->  orchestrates the above over a whole request
+
+The overlay itself is drawn by `overlay.py` (Pillow), not by FFmpeg's drawtext. That
+is what makes the ranking *stand*: every clip gets the same list in the same place,
+and only the revealed captions and the highlighted row differ between them. Once the
+clips are concatenated, the list looks like one continuous element that updates at
+each cut instead of text that pops in and out with its own clip.
 
 Design rules baked in on purpose (see README): NO background music and NO sound
 effects are ever added. Each clip keeps its own original audio unless `mute` is set.
 """
 from __future__ import annotations
 
-import os
-import re
-import shlex
 import subprocess
-import textwrap
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Sequence
 
 from . import settings
+from .overlay import Row, Style, Word, render_png, rows_for_state
 
 
 # --------------------------------------------------------------------------- #
@@ -55,41 +58,6 @@ def parse_timecode(value: str) -> float:
         h, m, sec = parts
         return h * 3600 + m * 60 + sec
     raise PipelineError(f"bad timecode: {value!r}")
-
-
-def _escape_fontfile(p: Path) -> str:
-    """FFmpeg's drawtext parses ':' and '\\' specially, which breaks Windows paths
-    like C:\\fonts\\x.ttf. Use forward slashes and escape the drive-letter colon."""
-    s = str(p).replace("\\", "/")
-    return s.replace(":", r"\:")
-
-
-def _drawtext(font: Path, text: str, *, size: int, y: str, color: str = "white",
-              border: int = 6) -> str:
-    """One centred drawtext filter. `text` is passed inline, so it must already be
-    a single line free of characters we don't escape below."""
-    # Escape the characters drawtext treats as special inside an inline text= value.
-    safe = (text.replace("\\", "\\\\")
-                .replace(":", r"\:")
-                .replace("'", r"\u2019")   # curly apostrophe dodges quote-escaping traps
-                .replace("%", r"\%"))
-    return (
-        f"drawtext=fontfile='{_escape_fontfile(font)}':text='{safe}':"
-        f"fontcolor={color}:fontsize={size}:borderw={border}:bordercolor=black:"
-        f"x=(w-text_w)/2:y={y}"
-    )
-
-
-def _wrap_title(title: str, width: int = 20, max_lines: int = 2) -> List[str]:
-    """Wrap a title to at most `max_lines`, ellipsising the overflow."""
-    title = " ".join((title or "").split())
-    if not title:
-        return []
-    lines = textwrap.wrap(title, width=width) or [title]
-    if len(lines) > max_lines:
-        lines = lines[:max_lines]
-        lines[-1] = lines[-1].rstrip(".") + "\u2026"
-    return lines
 
 
 # --------------------------------------------------------------------------- #
@@ -150,11 +118,11 @@ def download_segment(url: str, start: str, end: str, out_path: Path,
 
 
 # --------------------------------------------------------------------------- #
-# stage 2 - normalise to 9:16 and burn rank + title (single encode)
+# stage 2 - normalise to 9:16 and composite the standing overlay
 # --------------------------------------------------------------------------- #
 def _vertical_chain(fill: str) -> str:
     """Video filter that turns any source into an exact WxH 9:16 frame, ending on a
-    single [v] label ready for drawtext to append to."""
+    single [v] label ready for the overlay to be composited onto."""
     W, H, FPS = settings.WIDTH, settings.HEIGHT, settings.FPS
     if fill == "crop":
         return (f"[0:v]scale={W}:{H}:force_original_aspect_ratio=increase,"
@@ -169,52 +137,37 @@ def _vertical_chain(fill: str) -> str:
     )
 
 
-def process_clip(in_path: Path, out_path: Path, rank: int, title: str,
+def process_clip(in_path: Path, out_path: Path, overlay_png: Path,
                  fill: str = "blur", mute: bool = False) -> Path:
-    """One ffmpeg pass: source -> 9:16 -> rank badge + title burned -> normalised mp4.
+    """One ffmpeg pass: source -> 9:16 -> overlay composited -> normalised mp4.
+
+    `overlay_png` is a full-frame RGBA image produced by `overlay.render_png` for the
+    ranking state this clip should show. Because it is a still image, FFmpeg holds the
+    last (only) frame for the clip's whole duration, so the ranking is rock steady.
 
     Every output has identical codec params (h264 / yuv420p / WxH / FPS and aac stereo),
     which is what lets `stitch` concatenate them without re-encoding.
     """
     in_path, out_path = Path(in_path), Path(out_path)
-    font = settings.FONT
 
-    chain = _vertical_chain(fill)
-    label = "[v]"
-    overlays = []
-    # Rank badge, top-centre.
-    overlays.append(_drawtext(font, f"#{int(rank)}", size=104, y="70", color="white"))
-    # Title, wrapped, just under the badge.
-    y = 210
-    for line in _wrap_title(title):
-        overlays.append(_drawtext(font, line, size=60, y=str(y), color="white"))
-        y += 74
-
-    if overlays:
-        # append drawtexts onto the [v] chain
-        chain = chain[:-3] + "," + ",".join(overlays) + "[vout]"
-        vmap = "[vout]"
-    else:
-        chain = chain[:-3] + "[vout]"
-        vmap = "[vout]"
-
-    cmd = [settings.FFMPEG, "-y", "-i", str(in_path),
-           "-filter_complex", chain, "-map", vmap]
+    chain = _vertical_chain(fill) + ";[v][1:v]overlay=0:0:format=auto[vout]"
+    vmap = "[vout]"
 
     src_has_audio = (not mute) and has_audio(in_path)
+    cmd = [settings.FFMPEG, "-y", "-i", str(in_path), "-i", str(overlay_png)]
     if mute or not src_has_audio:
         # Synthesise a silent track so every normalised clip has the same stream
         # layout (keeps the concat copy-safe). Still: no music, no effects - silence.
-        cmd = [settings.FFMPEG, "-y", "-i", str(in_path),
-               "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
-               "-filter_complex", chain, "-map", vmap, "-map", "1:a", "-shortest"]
+        cmd += ["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+                "-filter_complex", chain, "-map", vmap, "-map", "2:a", "-shortest"]
     else:
-        cmd += ["-map", "0:a", "-ar", "44100", "-ac", "2"]
+        cmd += ["-filter_complex", chain, "-map", vmap,
+                "-map", "0:a", "-ar", "44100", "-ac", "2"]
 
     cmd += ["-c:v", "libx264", "-preset", settings.PRESET, "-crf", str(settings.CRF),
             "-pix_fmt", "yuv420p", "-r", str(settings.FPS),
             "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(out_path)]
-    _run(cmd, f"ffmpeg process clip (rank #{rank})")
+    _run(cmd, "ffmpeg process clip")
     return out_path
 
 
@@ -256,20 +209,68 @@ def stitch(clips: List[Path], out_path: Path) -> Path:
 # --------------------------------------------------------------------------- #
 @dataclass
 class ClipSpec:
+    """A slot: where to get the video, plus where it sits in the standing list."""
     url: str
     start: str
     end: str
     rank: int
-    title: str = ""
+    caption: str = ""
+    color: str = ""
 
 
 ProgressCB = Callable[[str, float, int], None]  # (stage, progress 0..1, clips_done)
 
 
+def _overlay_for(clips: Sequence[ClipSpec], title: Sequence[Word], style: Style,
+                 active_pos: int, path: Path) -> Path:
+    """Render the ranking's state for the clip at play position `active_pos`."""
+    rows = rows_for_state(
+        [Row(rank=c.rank, caption=c.caption, color=c.color) for c in clips],
+        list(range(len(clips))), active_pos, style.reveal,
+    )
+    render_png(title, rows, style, path)
+    return path
+
+
+def preview_clip(clips: Sequence[ClipSpec], active_pos: int, out_path: Path,
+                 title: Sequence[Word] = (), style: Optional[Style] = None,
+                 fill: str = "blur", mute: bool = False,
+                 tmp_dir: Optional[Path] = None) -> Path:
+    """Render exactly one clip - same download + normalise + overlay as the real
+    pipeline - with the ranking in the state it will be in when that clip plays. No
+    stitching, since there's only one clip."""
+    style = style or Style()
+    out_path = Path(out_path)
+    tmp_dir = Path(tmp_dir) if tmp_dir else out_path.parent
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    spec = clips[active_pos]
+    raw = tmp_dir / f"{out_path.stem}_raw.mp4"
+    png = tmp_dir / f"{out_path.stem}_ov.png"
+    try:
+        download_segment(spec.url, spec.start, spec.end, raw)
+        _overlay_for(clips, title, style, active_pos, png)
+        process_clip(raw, out_path, png, fill=fill, mute=mute)
+    finally:
+        for p in (raw, png):
+            try:
+                p.unlink()
+            except OSError:
+                pass
+    return out_path
+
+
 def run_pipeline(job_id: str, clips: List[ClipSpec], out_path: Path,
+                 title: Sequence[Word] = (), style: Optional[Style] = None,
                  fill: str = "blur", mute: bool = False,
                  progress: Optional[ProgressCB] = None) -> Path:
-    """Download, process and stitch every clip. `clips` is already in play order."""
+    """Download, process and stitch every clip. `clips` is already in play order.
+
+    Each clip is composited with the ranking as it stands *at that point in the
+    video*, so across the finished cut the list never disappears - it just fills in
+    and moves its highlight.
+    """
+    style = style or Style()
+
     def report(stage: str, frac: float, done: int):
         if progress:
             progress(stage, frac, done)
@@ -284,8 +285,8 @@ def run_pipeline(job_id: str, clips: List[ClipSpec], out_path: Path,
         raw = download_segment(c.url, c.start, c.end, work / f"raw_{i:02d}.mp4")
 
         report(f"Rendering clip {i + 1}/{n} (#{c.rank})", (i + 0.5) / (n + 1), i)
-        out = process_clip(raw, work / f"clip_{i:02d}.mp4", c.rank, c.title,
-                           fill=fill, mute=mute)
+        png = _overlay_for(clips, title, style, i, work / f"ov_{i:02d}.png")
+        out = process_clip(raw, work / f"clip_{i:02d}.mp4", png, fill=fill, mute=mute)
         processed.append(out)
 
     report("Stitching final video", n / (n + 1), n)
