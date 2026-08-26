@@ -7,6 +7,9 @@ Endpoints
     GET  /api/jobs/{job_id}     -> JobStatus    poll progress (shared by both above)
     GET  /api/jobs/{job_id}/video               download the finished mp4
     GET  /api/health           -> {ok, ffmpeg, yt_dlp, fonts}
+    GET  /api/library          -> your own clips on disk, for the picker
+    GET  /api/library/file/{id}  -> stream one of them (browser preview)
+    GET  /api/library/thumb/{id} -> its cached poster frame
 
 /api/overlay is the one that makes the GUI feel live: it draws the exact PNG that
 gets burned into the video, but skips every download and encode, so the preview can
@@ -30,7 +33,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import settings
+from . import library, settings
 from .models import (GenerateRequest, JobRef, JobStatus, OverlayRequest,
                      PreviewRequest, StyleSpec, TitleWord)
 from .overlay import Row, Style, Word, emoji_font_path, render_png, rows_for_state
@@ -54,7 +57,10 @@ async def _no_cache(request, call_next):
     file on disk changes - confusing during active development. This is a local
     single-user tool, so just tell the browser never to cache anything."""
     response = await call_next(request)
-    response.headers["Cache-Control"] = "no-store"
+    # Poster frames are content-addressed by mtime, so they are safe to cache and
+    # there are dozens of them on one screen.
+    if not request.url.path.startswith("/api/library/thumb/"):
+        response.headers["Cache-Control"] = "no-store"
     return response
 
 
@@ -74,7 +80,8 @@ def _title(words: Sequence[TitleWord]) -> List[Word]:
 
 
 def _specs(clips) -> List[ClipSpec]:
-    return [ClipSpec(c.url, c.start, c.end, c.rank, c.caption, c.color) for c in clips]
+    return [ClipSpec(c.url, c.start, c.end, c.rank, c.caption, c.color,
+                     c.source, c.library_id) for c in clips]
 
 
 def _set(job_id: str, **fields):
@@ -140,7 +147,47 @@ def health():
         "yt_dlp": bool(shutil.which(settings.YTDLP) or Path(settings.YTDLP).exists()),
         "font": font,
         "emoji_font": emoji.name if emoji else "",
+        "library": [{"path": str(r), "exists": r.is_dir()} for r in library.roots()],
     }
+
+
+@app.get("/api/library")
+def library_list(probe: bool = True):
+    """List the videos in the configured local folders, newest first.
+
+    `probe=false` skips ffprobe, which matters the first time a big folder is
+    opened: durations are memoised afterwards, so the second call is instant either
+    way. Folders that do not exist are reported rather than hidden - "my clips are
+    not showing" is nearly always a folder that was never created.
+    """
+    items = library.list_items(probe_media=probe)
+    return {
+        "roots": [{"path": str(r), "exists": r.is_dir()} for r in library.roots()],
+        "items": library.as_dicts(items),
+    }
+
+
+@app.get("/api/library/file/{item_id}")
+def library_file(item_id: str):
+    """Serve one library video so the GUI can play it while picking start/end."""
+    try:
+        path = library.resolve(item_id)
+    except library.LibraryError as e:
+        raise HTTPException(404, str(e))
+    return FileResponse(path, media_type="video/mp4", filename=path.name)
+
+
+@app.get("/api/library/thumb/{item_id}")
+def library_thumb(item_id: str):
+    """A cached poster frame for one library video, or 404 if it cannot be made."""
+    try:
+        thumb = library.thumbnail(item_id)
+    except library.LibraryError as e:
+        raise HTTPException(404, str(e))
+    if not thumb:
+        raise HTTPException(404, "no thumbnail")
+    return FileResponse(thumb, media_type="image/jpeg",
+                        headers={"Cache-Control": "max-age=3600"})
 
 
 @app.post("/api/overlay")

@@ -11,7 +11,7 @@ in-order video plays 1 first. Both are just different orderings of the same slot
 which is why `rank` is a field rather than the array index.
 """
 from typing import List, Optional, Literal
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class TitleWord(BaseModel):
@@ -53,20 +53,35 @@ class StyleSpec(BaseModel):
 class Clip(BaseModel):
     """One slot. Array order in `clips` is the PLAY order; `rank` is the row it
     occupies in the standing list, and `caption` is the text revealed next to that
-    row when this clip plays."""
-    url: str = Field(..., description="YouTube, TikTok or Instagram URL")
+    row when this clip plays.
+
+    A slot's footage comes from one of two places, chosen by `source`:
+    `"url"` downloads the window with yt-dlp, `"library"` trims it out of a video
+    you already have on disk, addressed by the opaque id from /api/library. The id
+    is deliberately not a path - the client never names a filesystem location, so
+    nothing outside the configured library roots is reachable.
+    """
+    source: Literal["url", "library"] = Field(
+        "url", description="Where the footage comes from")
+    url: str = Field("", description="YouTube, TikTok or Instagram URL (source='url')")
+    library_id: str = Field(
+        "", description="Id from /api/library of a local file (source='library')")
     start: str = Field(..., description="Segment start: seconds ('12'), 'M:SS' or 'H:MM:SS'")
     end: str = Field(..., description="Segment end, same formats as start")
     rank: int = Field(..., ge=1, le=99, description="Row in the standing ranking list")
     caption: str = Field("", description="Text shown beside the rank when revealed")
     color: str = Field("", description="Hex colour for the rank number; '' = auto")
 
-    @field_validator("url")
-    @classmethod
-    def _url_nonempty(cls, v: str) -> str:
-        if not v or not v.strip():
-            raise ValueError("url is required")
-        return v.strip()
+    @model_validator(mode="after")
+    def _one_source(self):
+        self.url = (self.url or "").strip()
+        self.library_id = (self.library_id or "").strip()
+        if self.source == "library":
+            if not self.library_id:
+                raise ValueError("library_id is required when source is 'library'")
+        elif not self.url:
+            raise ValueError("url is required when source is 'url'")
+        return self
 
 
 class RankSlot(BaseModel):

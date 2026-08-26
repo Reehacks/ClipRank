@@ -5,10 +5,11 @@ Instagram) into one vertical 9:16 "top N" ranking video — in the format where 
 whole ranking list stands on screen for the entire video** and fills in as the clips
 play, rather than each clip carrying its own number that vanishes at the cut.
 
-You give each rank a caption, a source URL and a start/end time, and say when it
-plays. The backend downloads just those windows, makes each one vertical, composites
-the ranking overlay in the state it should have at that point in the video, and
-stitches everything together.
+You give each rank a caption, a source and a start/end time, and say when it plays.
+A source is either a **link** (YouTube / TikTok / Instagram) or **one of your own
+videos** already on disk, picked from a thumbnail gallery in the GUI. The backend
+takes just those windows, makes each one vertical, composites the ranking overlay in
+the state it should have at that point in the video, and stitches everything together.
 
 By design it **never adds background music or sound effects** — each clip keeps its
 own original audio (or none, if you mute it).
@@ -99,7 +100,37 @@ curl http://localhost:8000/api/health
 # {"ok":true,"ffmpeg":true,"yt_dlp":true,"font":"Poppins-Bold.ttf","emoji_font":"NotoColorEmoji.ttf"}
 ```
 
+## Your own clips (the local library)
+
+Beside the URL box, every row has a **File** option that lists videos the backend can
+already see on disk, with poster frames, a folder filter and a scrub-and-pick preview.
+Handy when the clip was rendered by something else (ClipForge, a manual edit) and was
+never on the internet in the first place.
+
+The folder looked in is `%USERPROFILE%\Videos\Edit Ranking videos`.
+
+Override with `RANKING_LIBRARY_DIRS`, several folders separated by `;` on Windows or
+`:` elsewhere:
+
+```bash
+set RANKING_LIBRARY_DIRS=D:\renders;C:\Users\me\Videos\clips
+```
+
+Each folder is walked recursively; `.mp4 .mov .mkv .webm .m4v .avi` are listed,
+newest first. `GET /api/library` returns them, `GET /api/library/file/{id}` streams
+one, `GET /api/library/thumb/{id}` gives its cached poster.
+
+Two things worth knowing:
+
+- **A clip is addressed by an opaque id, never by a path.** The browser never sends a
+  filesystem location and the backend refuses one, so nothing outside the configured
+  folders is reachable even with a hand-crafted request.
+- **A local clip is trimmed inside the single normalise pass**, not pre-cut to an
+  intermediate file. A downloaded clip arrives already cut by yt-dlp; a local one is
+  already on disk, so cutting it first would encode the picture twice for nothing.
+
 ## API
+
 
 **Start a render** — returns immediately with a job id. `clips` is in **play order**;
 `rank` is the row each clip owns in the standing list.
@@ -119,7 +150,8 @@ curl -X POST http://localhost:8000/api/generate \
     "style": {"reveal":"accumulate","number_suffix":"."},
     "clips": [
       {"url":"https://youtu.be/XXXX","start":"0:12","end":"0:20","rank":6,"caption":"Almost 😂"},
-      {"url":"https://youtu.be/YYYY","start":"1:40","end":"1:50","rank":5,"caption":"Too heavy 💀"}
+      {"source":"library","library_id":"MC9jbGlwLm1wNA","start":"0:03","end":"0:11",
+       "rank":5,"caption":"Too heavy 💀"}
     ]
   }'
 # {"job_id":"a1b2c3d4e5f6"}

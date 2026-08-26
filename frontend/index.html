@@ -97,6 +97,48 @@
   .colorpick{width:26px;height:22px;padding:0;border:1px solid var(--line);
     border-radius:6px;background:none;cursor:pointer}
 
+  /* per-row source: URL box or a chosen library file */
+  .srccell{display:flex;gap:6px;align-items:center}
+  .srctog{display:inline-flex;border:1px solid var(--line);border-radius:8px;
+    overflow:hidden;flex:0 0 auto}
+  .srctog button{background:transparent;color:var(--muted);border:0;padding:6px 8px;
+    cursor:pointer;font-size:11px;line-height:1}
+  .srctog button.on{background:var(--line2);color:var(--text)}
+  .pickbtn{flex:1 1 auto;min-width:0;text-align:left;background:var(--panel2);
+    color:var(--text);border:1px solid var(--line);border-radius:9px;padding:8px 10px;
+    font-size:13px;cursor:pointer;white-space:nowrap;overflow:hidden;
+    text-overflow:ellipsis;font-family:inherit}
+  .pickbtn.empty{color:var(--muted)}
+  .pickbtn:hover{border-color:var(--line2)}
+
+  /* library picker modal */
+  .modal{position:fixed;inset:0;background:rgba(6,8,11,.72);z-index:20;
+    display:none;align-items:center;justify-content:center;padding:24px}
+  .modal.show{display:flex}
+  .modal .box{background:var(--panel);border:1px solid var(--line2);
+    border-radius:16px;width:min(1000px,100%);max-height:88vh;display:flex;
+    flex-direction:column;overflow:hidden}
+  .modal .head{display:flex;gap:10px;align-items:center;padding:14px 16px;
+    border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .modal .head h3{margin:0;font-size:15px}
+  .modal .head input[type=text]{width:200px}
+  .modal .head select{width:auto;min-width:150px}
+  .modal .body{overflow:auto;padding:14px 16px}
+  .modal .foot{padding:10px 16px;border-top:1px solid var(--line);
+    display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .lib{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+  .libitem{background:var(--panel2);border:1px solid var(--line);border-radius:12px;
+    overflow:hidden;cursor:pointer;text-align:left;padding:0;color:var(--text);
+    font:inherit}
+  .libitem:hover{border-color:var(--line2)}
+  .libitem.on{border-color:var(--accent)}
+  .libitem .thumb{width:100%;aspect-ratio:16/9;background:#0b0e13 center/cover no-repeat;
+    display:block;border-bottom:1px solid var(--line)}
+  .libitem .meta{padding:7px 9px}
+  .libitem .nm{font-size:12px;line-height:1.3;word-break:break-word;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .libitem .sub{font-size:11px;color:var(--muted);margin-top:3px}
+
   .btnrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
   button.ghost{background:var(--panel2);color:var(--text);border:1px solid var(--line);
     border-radius:9px;padding:7px 12px;font-size:12.5px;cursor:pointer}
@@ -182,7 +224,7 @@
           <tr>
             <th class="cell-rank">Rank</th>
             <th>Caption <span style="text-transform:none;font-weight:400">(revealed when it plays)</span></th>
-            <th>Source URL</th>
+            <th>Source <span style="text-transform:none;font-weight:400">(a link, or one of your own clips)</span></th>
             <th class="cell-narrow">Start</th>
             <th class="cell-narrow">End</th>
             <th class="cell-play">Plays</th>
@@ -253,6 +295,39 @@
   </div>
 </div>
 
+<!-- ====================== LOCAL CLIP PICKER ====================== -->
+<div class="modal" id="libmodal">
+  <div class="box">
+    <div class="head">
+      <h3>Your clips</h3>
+      <select id="libfolder"><option value="">All folders</option></select>
+      <input type="text" id="libsearch" placeholder="Search by name…">
+      <span style="flex:1"></span>
+      <button class="ghost" id="librefresh">↻ Rescan</button>
+      <button class="ghost" id="libclose">✕ Close</button>
+    </div>
+    <div class="body">
+      <div class="lib" id="libgrid"></div>
+      <p class="hint" id="libempty" style="display:none"></p>
+    </div>
+    <div class="foot">
+      <video id="libpv" style="width:150px;aspect-ratio:9/16;background:#000;
+             border-radius:8px;display:none;object-fit:contain" controls muted playsinline></video>
+      <div style="flex:1;min-width:200px">
+        <div id="libsel" class="hint">Pick a clip above.</div>
+        <div class="btnrow" style="margin-top:8px">
+          <label class="lbl" style="margin:0;align-self:center">Start</label>
+          <input type="text" id="libstart" style="width:90px" placeholder="0:00">
+          <label class="lbl" style="margin:0;align-self:center">End</label>
+          <input type="text" id="libend" style="width:90px" placeholder="0:08">
+          <button class="ghost" id="libwhole">Whole clip</button>
+        </div>
+      </div>
+      <button class="primary" id="libuse" disabled>Use this clip</button>
+    </div>
+  </div>
+</div>
+
 <div class="genbar">
   <button class="primary" id="gen">Generate video</button>
   <div class="progress" id="prog"><i></i></div>
@@ -302,7 +377,8 @@ const state = {
 };
 
 function blankSlot(rank){
-  return {rank, caption:'', url:'', start:'', end:'', color:'', play:rank};
+  return {rank, caption:'', url:'', start:'', end:'', color:'', play:rank,
+          source:'url', library_id:'', library_name:''};
 }
 function setCount(n){
   const cur = state.slots.length;
@@ -374,7 +450,16 @@ function renderRows(){
         </div>
       </td>
       <td><input type="text" class="c-cap" value="" placeholder="No fear 🙈"></td>
-      <td><input type="url" class="c-url" value="" placeholder="https://…"></td>
+      <td>
+        <div class="srccell">
+          <span class="srctog">
+            <button data-s="url" title="Paste a link">Link</button>
+            <button data-s="library" title="Use a video from your own folder">File</button>
+          </span>
+          <input type="url" class="c-url" value="" placeholder="https://…">
+          <button type="button" class="pickbtn c-pick" style="display:none"></button>
+        </div>
+      </td>
       <td class="cell-narrow"><input type="text" class="c-start" value="" placeholder="0:12"></td>
       <td class="cell-narrow"><input type="text" class="c-end" value="" placeholder="0:20"></td>
       <td class="cell-play"><select class="c-play">${
@@ -383,6 +468,12 @@ function renderRows(){
 
     const cap = tr.querySelector('.c-cap');   cap.value = s.caption;
     const url = tr.querySelector('.c-url');   url.value = s.url;
+    const pick = tr.querySelector('.c-pick');
+    applySource(s, tr);
+    tr.querySelectorAll('.srctog button').forEach(b => b.addEventListener('click', ()=>{
+      s.source = b.dataset.s; applySource(s, tr);
+    }));
+    pick.addEventListener('click', ()=> openLibrary(s));
     const st  = tr.querySelector('.c-start'); st.value  = s.start;
     const en  = tr.querySelector('.c-end');   en.value  = s.end;
     tr.querySelector('.c-play').value = String(s.play);
@@ -404,6 +495,183 @@ function renderRows(){
     });
   });
 }
+
+/** A slot is renderable once it names footage and a window. Both sources are
+    equally valid here - the only difference is which field carries the source. */
+function slotReady(s){
+  const src = s.source === 'library' ? s.library_id : s.url;
+  return !!(src && s.start && s.end);
+}
+function clipPayload(s){
+  return {source: s.source || 'url',
+          url: s.source === 'library' ? '' : s.url,
+          library_id: s.source === 'library' ? s.library_id : '',
+          start: s.start, end: s.end, rank: s.rank,
+          caption: s.caption, color: s.color};
+}
+
+/* ---------------------------- local clip library -----------------------
+   Two ways to fill a slot: paste a link, or pick a video the backend can already
+   see on disk. The picker addresses files by the opaque id the API hands out, never
+   by path - the browser never learns a filesystem location and the backend never
+   accepts one, so there is nothing to sanitise on either side.
+   ---------------------------------------------------------------------- */
+const lib = {items:[], loaded:false, loading:false, roots:[],
+             target:null, chosen:null, folder:'', query:''};
+
+function fmtDur(sec){
+  if(!sec) return '';
+  const t = Math.round(sec);
+  return Math.floor(t/60) + ':' + String(t%60).padStart(2,'0');
+}
+
+/** Show the URL box or the file button for a slot, and mark the toggle. */
+function applySource(s, tr){
+  const isLib = s.source === 'library';
+  const url  = tr.querySelector('.c-url');
+  const pick = tr.querySelector('.c-pick');
+  url.style.display  = isLib ? 'none' : '';
+  pick.style.display = isLib ? '' : 'none';
+  pick.textContent = s.library_name || '📁 Choose a clip…';
+  pick.classList.toggle('empty', !s.library_name);
+  tr.querySelectorAll('.srctog button').forEach(b =>
+    b.classList.toggle('on', b.dataset.s === s.source));
+}
+
+async function loadLibrary(force){
+  if(lib.loading) return;
+  if(lib.loaded && !force) return;
+  lib.loading = true;
+  renderLibrary('Scanning your folders…');
+  try{
+    const r = await fetch(API+'/api/library');
+    const d = await r.json();
+    lib.items = d.items || [];
+    lib.roots = d.roots || [];
+    lib.loaded = true;
+  }catch(err){
+    lib.items = [];
+    renderLibrary('Could not reach the backend: '+(err.message||err));
+    lib.loading = false;
+    return;
+  }
+  lib.loading = false;
+  renderFolders();
+  renderLibrary();
+}
+
+function renderFolders(){
+  const sel = document.getElementById('libfolder');
+  const folders = [...new Set(lib.items.map(i => i.folder))].sort();
+  const keep = lib.folder;
+  sel.innerHTML = '<option value="">All folders</option>' +
+    folders.map(f => `<option value="${f}">${f || '(top level)'}</option>`).join('');
+  sel.value = folders.includes(keep) ? keep : '';
+  lib.folder = sel.value;
+}
+
+function visibleItems(){
+  const q = lib.query.toLowerCase();
+  return lib.items.filter(i =>
+    (!lib.folder || i.folder === lib.folder) &&
+    (!q || i.rel.toLowerCase().includes(q)));
+}
+
+function renderLibrary(message){
+  const grid = document.getElementById('libgrid');
+  const empty = document.getElementById('libempty');
+  grid.innerHTML = '';
+  if(message){ empty.style.display=''; empty.textContent = message; return; }
+  const items = visibleItems();
+  if(!items.length){
+    empty.style.display = '';
+    empty.innerHTML = lib.items.length
+      ? 'Nothing matches that filter.'
+      : 'No videos found. Folders looked in:<br>' +
+        lib.roots.map(r=>`<code>${r.path}</code> ${r.exists?'':'— does not exist'}`).join('<br>') +
+        '<br>Put clips there, or set <code>RANKING_LIBRARY_DIRS</code> and restart.';
+    return;
+  }
+  empty.style.display = 'none';
+  items.forEach(it=>{
+    const b = document.createElement('button');
+    b.className = 'libitem' + (lib.chosen && lib.chosen.id === it.id ? ' on' : '');
+    const sub = [fmtDur(it.duration), it.width ? it.width+'×'+it.height : '',
+                 it.folder].filter(Boolean).join(' · ');
+    b.innerHTML = `<span class="thumb" style="background-image:url('${API}/api/library/thumb/${it.id}')"></span>
+      <span class="meta"><span class="nm"></span><span class="sub"></span></span>`;
+    b.querySelector('.nm').textContent = it.name;
+    b.querySelector('.sub').textContent = sub;
+    b.addEventListener('click', ()=> chooseLibItem(it));
+    grid.appendChild(b);
+  });
+}
+
+function chooseLibItem(it){
+  lib.chosen = it;
+  document.getElementById('libsel').textContent =
+    it.name + (it.duration ? ' · ' + fmtDur(it.duration) + ' long' : '');
+  const v = document.getElementById('libpv');
+  v.src = API+'/api/library/file/'+it.id;
+  v.style.display = '';
+  document.getElementById('libuse').disabled = false;
+  // Sensible default range: the whole clip, unless this slot already has one.
+  const st = document.getElementById('libstart'), en = document.getElementById('libend');
+  if(!st.value) st.value = '0';
+  if(!en.value && it.duration) en.value = it.duration.toFixed(1);
+  renderLibrary();
+}
+
+function openLibrary(slot){
+  lib.target = slot;
+  lib.chosen = null;
+  document.getElementById('libstart').value = slot.start || '';
+  document.getElementById('libend').value = slot.end || '';
+  document.getElementById('libsel').textContent = 'Pick a clip above.';
+  document.getElementById('libuse').disabled = true;
+  const v = document.getElementById('libpv'); v.pause(); v.removeAttribute('src');
+  v.style.display = 'none';
+  document.getElementById('libmodal').classList.add('show');
+  loadLibrary(false);
+  renderLibrary(lib.loaded ? undefined : 'Scanning your folders…');
+}
+
+function closeLibrary(){
+  document.getElementById('libmodal').classList.remove('show');
+  const v = document.getElementById('libpv'); v.pause(); v.removeAttribute('src');
+}
+
+document.getElementById('libclose').addEventListener('click', closeLibrary);
+document.getElementById('libmodal').addEventListener('click', e=>{
+  if(e.target.id === 'libmodal') closeLibrary();
+});
+document.addEventListener('keydown', e=>{
+  if(e.key === 'Escape') closeLibrary();
+});
+document.getElementById('librefresh').addEventListener('click', ()=> loadLibrary(true));
+document.getElementById('libfolder').addEventListener('change', e=>{
+  lib.folder = e.target.value; renderLibrary();
+});
+document.getElementById('libsearch').addEventListener('input', e=>{
+  lib.query = e.target.value.trim(); renderLibrary();
+});
+document.getElementById('libwhole').addEventListener('click', ()=>{
+  if(!lib.chosen) return;
+  document.getElementById('libstart').value = '0';
+  document.getElementById('libend').value = (lib.chosen.duration || 0).toFixed(1);
+});
+document.getElementById('libuse').addEventListener('click', ()=>{
+  const s = lib.target, it = lib.chosen;
+  if(!s || !it) return;
+  s.source = 'library';
+  s.library_id = it.id;
+  s.library_name = it.name;
+  s.start = document.getElementById('libstart').value.trim() || '0';
+  s.end   = document.getElementById('libend').value.trim() ||
+            (it.duration ? it.duration.toFixed(1) : '');
+  closeLibrary();
+  renderRows();
+});
 
 /* ------------------------------- scrubber ------------------------------ */
 function renderScrub(){
@@ -485,13 +753,12 @@ document.getElementById('autoplay').addEventListener('click', ()=>{
 document.getElementById('proof').addEventListener('click', async ()=>{
   const order = playOrder();
   const clips = order.map(i => state.slots[i]);
-  const missing = clips.findIndex(s => !s.url || !s.start || !s.end);
+  const missing = clips.findIndex(s => !slotReady(s));
   if(missing !== -1 && missing <= state.activePos){
-    setPv('Rank '+clips[missing].rank+' needs a URL, start and end before this can render.');
+    setPv('Rank '+clips[missing].rank+' needs a source, start and end before this can render.');
     return;
   }
-  const usable = clips.slice(0, state.activePos+1)
-                      .every(s => s.url && s.start && s.end);
+  const usable = clips.slice(0, state.activePos+1).every(slotReady);
   if(!usable){ setPv('Fill in every clip up to this one first.'); return; }
 
   const btn = document.getElementById('proof');
@@ -503,8 +770,7 @@ document.getElementById('proof').addEventListener('click', async ()=>{
     const r = await fetch(API+'/api/preview',{method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
-        clips: clips.map(s=>({url:s.url,start:s.start,end:s.end,rank:s.rank,
-                              caption:s.caption,color:s.color})),
+        clips: clips.map(clipPayload),
         active_pos: state.activePos,
         title: titleWords(), style: state.style,
         fill: state.fill, mute: state.mute})});
@@ -632,10 +898,10 @@ const stageEl = document.getElementById('stage2');
 genBtn.addEventListener('click', async ()=>{
   const order = playOrder();
   const clips = order.map(i => state.slots[i]);
-  const bad = clips.filter(s => !s.url || !s.start || !s.end);
+  const bad = clips.filter(s => !slotReady(s));
   if(bad.length){
-    alert('Every rank needs a URL, start and end.\nStill missing: '
-          + bad.map(s=>'#'+s.rank).join(', '));
+    alert('Every rank needs a source (a link or one of your clips), a start and an end.'
+          + '\nStill missing: ' + bad.map(s=>'#'+s.rank).join(', '));
     return;
   }
 
@@ -648,8 +914,7 @@ genBtn.addEventListener('click', async ()=>{
     const r = await fetch(API+'/api/generate',{method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
-        clips: clips.map(s=>({url:s.url,start:s.start,end:s.end,rank:s.rank,
-                              caption:s.caption,color:s.color})),
+        clips: clips.map(clipPayload),
         title: titleWords(), style: state.style,
         fill: state.fill, mute: state.mute})});
     if(!r.ok) throw new Error('HTTP '+r.status+' – '+(await r.text()).slice(0,200));

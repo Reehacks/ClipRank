@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, List, Optional, Sequence
 
-from . import settings
+from . import library, settings
 from .overlay import Row, Style, Word, render_png, rows_for_state
 
 
@@ -118,6 +118,39 @@ def download_segment(url: str, start: str, end: str, out_path: Path,
 
 
 # --------------------------------------------------------------------------- #
+# stage 1b - resolve a slot to (file, trim) whichever source it came from
+# --------------------------------------------------------------------------- #
+def fetch_segment(spec: "ClipSpec", raw_path: Path):
+    """Return (path, ss, dur) for one slot, ready to hand to `process_clip`.
+
+    A URL slot is downloaded to `raw_path` and needs no further trim - yt-dlp has
+    already cut the window. A library slot returns the source file untouched with
+    the trim carried alongside it, so the cut happens inside the single normalise
+    pass instead of costing an extra encode and an extra copy of the footage.
+    """
+    a, b = parse_timecode(spec.start), parse_timecode(spec.end)
+    if b <= a:
+        raise PipelineError(f"end ({spec.end}) must be after start ({spec.start})")
+
+    if spec.source == "library":
+        try:
+            src = library.resolve(spec.library_id)
+        except library.LibraryError as e:
+            raise PipelineError(str(e)) from e
+        total, _, _ = library.probe(src)
+        if total and a >= total:
+            raise PipelineError(
+                f"start {spec.start} is past the end of {src.name} "
+                f"({total:.1f}s long)")
+        if total and b > total + 0.05:
+            b = total          # clamp rather than refuse: a rounded end is normal
+        return src, a, max(0.05, b - a)
+
+    download_segment(spec.url, spec.start, spec.end, raw_path)
+    return raw_path, None, None
+
+
+# --------------------------------------------------------------------------- #
 # stage 2 - normalise to 9:16 and composite the standing overlay
 # --------------------------------------------------------------------------- #
 def _vertical_chain(fill: str) -> str:
@@ -138,7 +171,8 @@ def _vertical_chain(fill: str) -> str:
 
 
 def process_clip(in_path: Path, out_path: Path, overlay_png: Path,
-                 fill: str = "blur", mute: bool = False) -> Path:
+                 fill: str = "blur", mute: bool = False,
+                 ss: Optional[float] = None, dur: Optional[float] = None) -> Path:
     """One ffmpeg pass: source -> 9:16 -> overlay composited -> normalised mp4.
 
     `overlay_png` is a full-frame RGBA image produced by `overlay.render_png` for the
@@ -147,6 +181,12 @@ def process_clip(in_path: Path, out_path: Path, overlay_png: Path,
 
     Every output has identical codec params (h264 / yuv420p / WxH / FPS and aac stereo),
     which is what lets `stitch` concatenate them without re-encoding.
+
+    `ss`/`dur` trim the input as part of this same pass. That is how a library file
+    is cut: it is already on disk, so pre-trimming it to an intermediate would mean
+    encoding the picture twice for nothing. `-ss` goes BEFORE `-i` - ffmpeg still
+    seeks accurately there, and putting it after would decode and throw away
+    everything from the start of a long source.
     """
     in_path, out_path = Path(in_path), Path(out_path)
 
@@ -154,7 +194,12 @@ def process_clip(in_path: Path, out_path: Path, overlay_png: Path,
     vmap = "[vout]"
 
     src_has_audio = (not mute) and has_audio(in_path)
-    cmd = [settings.FFMPEG, "-y", "-i", str(in_path), "-i", str(overlay_png)]
+    trim: List[str] = []
+    if ss is not None:
+        trim += ["-ss", f"{ss:.3f}"]
+    if dur is not None:
+        trim += ["-t", f"{dur:.3f}"]
+    cmd = [settings.FFMPEG, "-y", *trim, "-i", str(in_path), "-i", str(overlay_png)]
     if mute or not src_has_audio:
         # Synthesise a silent track so every normalised clip has the same stream
         # layout (keeps the concat copy-safe). Still: no music, no effects - silence.
@@ -209,13 +254,20 @@ def stitch(clips: List[Path], out_path: Path) -> Path:
 # --------------------------------------------------------------------------- #
 @dataclass
 class ClipSpec:
-    """A slot: where to get the video, plus where it sits in the standing list."""
+    """A slot: where to get the video, plus where it sits in the standing list.
+
+    `source` is "url" (fetched with yt-dlp) or "library" (already on disk, named by
+    an opaque library id). Everything downstream of `fetch_segment` is identical for
+    the two, which is why the rest of the pipeline never branches on it.
+    """
     url: str
     start: str
     end: str
     rank: int
     caption: str = ""
     color: str = ""
+    source: str = "url"
+    library_id: str = ""
 
 
 ProgressCB = Callable[[str, float, int], None]  # (stage, progress 0..1, clips_done)
@@ -247,9 +299,9 @@ def preview_clip(clips: Sequence[ClipSpec], active_pos: int, out_path: Path,
     raw = tmp_dir / f"{out_path.stem}_raw.mp4"
     png = tmp_dir / f"{out_path.stem}_ov.png"
     try:
-        download_segment(spec.url, spec.start, spec.end, raw)
+        src, ss, dur = fetch_segment(spec, raw)
         _overlay_for(clips, title, style, active_pos, png)
-        process_clip(raw, out_path, png, fill=fill, mute=mute)
+        process_clip(src, out_path, png, fill=fill, mute=mute, ss=ss, dur=dur)
     finally:
         for p in (raw, png):
             try:
@@ -281,12 +333,14 @@ def run_pipeline(job_id: str, clips: List[ClipSpec], out_path: Path,
     processed: List[Path] = []
 
     for i, c in enumerate(clips):
-        report(f"Downloading clip {i + 1}/{n} (#{c.rank})", i / (n + 1), i)
-        raw = download_segment(c.url, c.start, c.end, work / f"raw_{i:02d}.mp4")
+        verb = "Reading" if c.source == "library" else "Downloading"
+        report(f"{verb} clip {i + 1}/{n} (#{c.rank})", i / (n + 1), i)
+        src, ss, dur = fetch_segment(c, work / f"raw_{i:02d}.mp4")
 
         report(f"Rendering clip {i + 1}/{n} (#{c.rank})", (i + 0.5) / (n + 1), i)
         png = _overlay_for(clips, title, style, i, work / f"ov_{i:02d}.png")
-        out = process_clip(raw, work / f"clip_{i:02d}.mp4", png, fill=fill, mute=mute)
+        out = process_clip(src, work / f"clip_{i:02d}.mp4", png,
+                           fill=fill, mute=mute, ss=ss, dur=dur)
         processed.append(out)
 
     report("Stitching final video", n / (n + 1), n)

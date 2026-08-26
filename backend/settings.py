@@ -26,6 +26,30 @@ FFMPEG = os.environ.get("FFMPEG_BIN", "ffmpeg")
 FFPROBE = os.environ.get("FFPROBE_BIN", "ffprobe")
 YTDLP = os.environ.get("YTDLP_BIN") or shutil.which("yt-dlp") or "yt-dlp"
 
+# ---------------------------------------------------------------------------
+# Local clip library
+# ---------------------------------------------------------------------------
+# The folder of your OWN rendered clips, offered in the GUI as an alternative to a
+# URL. It is walked recursively; anything resolving outside it is refused.
+# RANKING_LIBRARY_DIRS can name several folders instead, separated by os.pathsep
+# (';' on Windows) - the index of a folder in this list is baked into the ids the
+# GUI hands back, so add new folders at the END rather than in front of this one.
+_DEFAULT_LIBRARY = [
+    Path.home() / "Videos" / "Edit Ranking videos",
+]
+_env_lib = os.environ.get("RANKING_LIBRARY_DIRS", "")
+LIBRARY_DIRS = [
+    Path(p).expanduser()
+    for p in (_env_lib.split(os.pathsep) if _env_lib else [])
+    if p.strip()
+] or _DEFAULT_LIBRARY
+
+# Extensions the library picker will list.
+LIBRARY_EXTS = {".mp4", ".mov", ".mkv", ".webm", ".m4v", ".avi"}
+
+# Poster frames for the picker are cached here so a folder redraw is instant.
+THUMB_DIR = Path(os.environ.get("RANKING_THUMB_DIR", WORK_DIR / ".thumbs"))
+
 # Optional Netscape-format cookies file. TikTok, Instagram and age-gated YouTube
 # often need this; public YouTube usually does not.
 COOKIES = os.environ.get("RANKING_COOKIES") or None
@@ -41,3 +65,4 @@ PRESET = os.environ.get("RANKING_PRESET", "veryfast")
 
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+THUMB_DIR.mkdir(parents=True, exist_ok=True)
